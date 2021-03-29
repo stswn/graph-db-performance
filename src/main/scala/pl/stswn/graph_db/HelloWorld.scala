@@ -1,9 +1,9 @@
 package pl.stswn.graph_db
 
-import zio.App
-import zio.console._
 import java.io.IOException
-import zio.ZIO
+
+import zio.console._
+import zio.{ App, ZIO }
 
 object HelloWorld extends App {
 

@@ -1,0 +1,11 @@
+repos:
+- repo: local
+  hooks:
+  - id: sbt-check
+    name: Scalafmt and scalafix check
+    language: system
+    always_run: true
+    pass_filenames: false
+    verbose: false
+    entry: sbt
+    args: ['; check']
