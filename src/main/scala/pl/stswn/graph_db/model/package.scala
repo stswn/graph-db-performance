@@ -22,8 +22,7 @@ package object model {
     }
     val mandatoryEntitiesWithAccounts = entities.flatMap { entity =>
       genMandatoryAccount(entity).sample.map(_.value).flatMap { account =>
-        account.copy(id = entity.id)
-        ZStream(entity, account)
+        ZStream(entity, account.copy(id = entity.id))
       }
     }
     val otherAccounts = ZStream.iterate(numOfEntities)(_ + 1).take(numOfAccounts - numOfEntities).flatMap { accountId =>
@@ -93,7 +92,7 @@ package object model {
     Gen.stringN(30)(Gen.numericChar).map(bban => country + bban)
 
   private def genAccount(numOfEntities: Long) = for {
-    entityId <- Gen.long(0, numOfEntities)
+    entityId <- Gen.long(0, numOfEntities - 1)
     country  <- genCountry
     number   <- genNumber(country)
     bank     <- genBank(country)
@@ -101,7 +100,7 @@ package object model {
 
   private def genMandatoryTransaction(accountId: Long, numOfAccounts: Long) = for {
     outgoing       <- Gen.boolean
-    otherAccountId <- Gen.long(0L, numOfAccounts).filter(_ != accountId)
+    otherAccountId <- Gen.long(0L, numOfAccounts - 1).filter(_ != accountId)
     amount         <- Gen.bigDecimal(5, 100000)
     date           <- Gen.localDateTime(LocalDate.of(2000, 1, 1).atStartOfDay, LocalDate.of(2021, 1, 1).atStartOfDay)
     description    <- Gen.option(Gen.elements("Short description", "Test", "Slightly longer description, oh yeah!"))
@@ -115,8 +114,8 @@ package object model {
   )
 
   private def genTransaction(numOfAccounts: Long) = for {
-    senderId   <- Gen.long(0L, numOfAccounts)
-    receiverId <- Gen.long(0L, numOfAccounts).filter(_ != senderId)
+    senderId   <- Gen.long(0L, numOfAccounts - 1)
+    receiverId <- Gen.long(0L, numOfAccounts - 1).filter(_ != senderId)
     amountBase <- Gen.int(1, 100)
     amountExp  <- Gen.int(0, 3)
     amount = BigDecimal(amountBase) * (BigDecimal(10) pow amountExp)
