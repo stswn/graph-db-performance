@@ -6,7 +6,7 @@ import zio.{ App, ExitCode, URIO, ZIO, random }
 
 import pl.stswn.graph_db.adapters.{ Neo4JAdapter, PostgresAdapter, TestAdapter }
 
-object Main extends App {
+object Main extends App:
 
   def run(args: List[String]): URIO[zio.ZEnv, ExitCode] = {
     putStrLn("Graph database performance testing") *>
@@ -14,11 +14,11 @@ object Main extends App {
       noe4JLogic
   }.exitCode
 
-  val numOfEntities = 100L
+  val numOfEntities = 10L
 
   def logic(database: String): ZIO[Console with Random with TestAdapter, Throwable, Unit] = for {
     _ <- putStrLn(s"$database :: start")
-    elements = model.elements(numOfEntities, 250, 25000)
+    elements = model.elements(numOfEntities, 25, 2500)
     initTime <- TestAdapter.insertTestData(elements)
     _        <- putStrLn(s"$database :: init :: ${toMsString(initTime)}")
     _ <- (for {
@@ -36,4 +36,3 @@ object Main extends App {
 
   private def toMsString(nanos: Long): String =
     (nanos / 1000000).toString + "ms"
-}

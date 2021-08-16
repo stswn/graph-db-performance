@@ -7,7 +7,7 @@ import com.dimafeng.testcontainers.{ Neo4jContainer, PostgreSQLContainer, Single
 import izumi.reflect.Tag
 import org.testcontainers.utility.DockerImageName
 
-object DbContainer {
+object DbContainer:
   type Postgres = Has[PostgreSQLContainer]
   type Neo4J    = Has[Neo4jContainer]
 
@@ -24,4 +24,3 @@ object DbContainer {
     containerLayer(PostgreSQLContainer(dockerImageNameOverride = DockerImageName.parse("postgres:13.3")))
   val neo4J: ZLayer[Blocking, Nothing, Neo4J] =
     containerLayer(Neo4jContainer(neo4jImageVersion = DockerImageName.parse("neo4j:4.2")))
-}

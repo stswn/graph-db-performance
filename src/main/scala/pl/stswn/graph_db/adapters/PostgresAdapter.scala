@@ -1,28 +1,41 @@
 package pl.stswn.graph_db.adapters
 
-import javax.sql.DataSource
+import cats.effect.Blocker
 
+import javax.sql.DataSource
 import zio._
-import zio.blocking.Blocking
+import zio.blocking.{ Blocking, blocking }
 import zio.clock.Clock
 import zio.random.Random
 import zio.stream.ZStream
-
 import com.dimafeng.testcontainers.PostgreSQLContainer
+import doobie._
 import doobie.implicits._
 import doobie.postgres.implicits._
-import io.github.gaelrenoux.tranzactio.doobie._
+import zio.interop.catz._
 import org.postgresql.ds.PGSimpleDataSource
 import pl.stswn.graph_db.DbContainer
 import pl.stswn.graph_db.model.{ Account, Entity, ModelElement, Transaction }
+import doobie.util.transactor.Transactor
 
-object PostgresAdapter {
-  val live: ZLayer[Blocking with Clock with Random, Throwable, TestAdapter] = {
+object PostgresAdapter:
+  type Database = Has[Transactor[Task]]
+
+  private val databaseLayer: ZLayer[Has[DataSource] with Blocking with Clock, Nothing, Database] = (
+    for {
+      dataSource <- ZIO.service[DataSource]
+      connectEC  <- ZIO.descriptor.map(_.executor.asEC)
+      blockingEC <- blocking(ZIO.descriptor.map(_.executor.asEC))
+      blocker    = Blocker.liftExecutionContext(blockingEC)
+      transactor = Transactor.fromDataSource[Task](dataSource, connectEC, blocker)
+    } yield transactor
+  ).toLayer
+
+  val live: ZLayer[Blocking with Clock with Random, Throwable, TestAdapter] =
     val postgres         = DbContainer.postgres ++ ZLayer.identity[Blocking]
     val filledDataSource = postgres >>> dataSource
-    val database         = (filledDataSource ++ ZLayer.identity[Blocking with Clock]) >>> Database.fromDatasource
+    val database         = (filledDataSource ++ ZLayer.identity[Blocking with Clock]) >>> databaseLayer
     (database ++ ZLayer.identity[Blocking with Clock with Random]) >>> layer
-  }
 
   private def dataSource = (
     for {
@@ -45,9 +58,9 @@ object PostgresAdapter {
       _         <- init.provide(dbEnv)
       clock     <- ZIO.service[Clock.Service]
     } yield new TestAdapter.Service {
-      private def time(task: TranzactIO[_]): Task[Long] = for {
+      private def time(queryIO: RIO[Database, _]): Task[Long] = for {
         start <- clock.nanoTime
-        _     <- Database.transactionOrWiden(task).provide(dbEnv)
+        _     <- queryIO.provide(dbEnv)
         end   <- clock.nanoTime
       } yield end - start
 
@@ -104,45 +117,49 @@ object PostgresAdapter {
     }
   ).toLayer
 
-  private def init = Database.transactionOrWiden(
-    for {
-      _ <- tzio {
-        sql"""
-             |CREATE TABLE entity (
-             |  id BIGINT PRIMARY KEY,
-             |  name TEXT NOT NULL,
-             |  country TEXT NOT NULL
-             |)""".stripMargin.update.run
-      }
-      _ <- tzio {
-        sql"""
-             |CREATE TABLE account (
-             |  id BIGINT PRIMARY KEY,
-             |  entity_id BIGINT NOT NULL,
-             |  number TEXT NOT NULL,
-             |  institution TEXT NOT NULL,
-             |  CONSTRAINT fk_entity
-             |    FOREIGN KEY(entity_id)
-             |	  REFERENCES entity(id)
-             |)""".stripMargin.update.run
-      }
-      _ <- tzio {
-        sql"""
-             |CREATE TABLE transaction (
-             |  id BIGINT PRIMARY KEY,
-             |  sender BIGINT NOT NULL,
-             |  receiver BIGINT NOT NULL,
-             |  amount NUMERIC(30, 4) NOT NULL,
-             |  date TIMESTAMP NOT NULL,
-             |  description TEXT,
-             |  CONSTRAINT fk_sender
-             |    FOREIGN KEY(sender)
-             |	  REFERENCES account(id),
-             |  CONSTRAINT fk_receiver
-             |    FOREIGN KEY(receiver)
-             |	  REFERENCES account(id)
-             |)""".stripMargin.update.run
-      }
-    } yield ()
-  )
-}
+  private def init = for {
+    _ <- tzio {
+      sql"""
+           |CREATE TABLE entity (
+           |  id BIGINT PRIMARY KEY,
+           |  name TEXT NOT NULL,
+           |  country TEXT NOT NULL
+           |)""".stripMargin.update.run
+    }
+    _ <- tzio {
+      sql"""
+           |CREATE TABLE account (
+           |  id BIGINT PRIMARY KEY,
+           |  entity_id BIGINT NOT NULL,
+           |  number TEXT NOT NULL,
+           |  institution TEXT NOT NULL,
+           |  CONSTRAINT fk_entity
+           |    FOREIGN KEY(entity_id)
+           |	  REFERENCES entity(id)
+           |)""".stripMargin.update.run
+    }
+    _ <- tzio {
+      sql"""
+           |CREATE TABLE transaction (
+           |  id BIGINT PRIMARY KEY,
+           |  sender BIGINT NOT NULL,
+           |  receiver BIGINT NOT NULL,
+           |  amount NUMERIC(30, 4) NOT NULL,
+           |  date TIMESTAMP NOT NULL,
+           |  description TEXT,
+           |  CONSTRAINT fk_sender
+           |    FOREIGN KEY(sender)
+           |	  REFERENCES account(id),
+           |  CONSTRAINT fk_receiver
+           |    FOREIGN KEY(receiver)
+           |	  REFERENCES account(id)
+           |)""".stripMargin.update.run
+    }
+  } yield ()
+
+  private def tzio[T](connIO: ConnectionIO[T]): RIO[Database, T] = for {
+    transactor <- ZIO.service[Transactor[Task]]
+    res        <- connIO.transact(transactor)
+  } yield res
+
+end PostgresAdapter
