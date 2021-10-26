@@ -16,17 +16,17 @@ object Main extends App:
 
   val numOfEntities = 10L
 
-  def logic(database: String): ZIO[Console with Random with TestAdapter, Throwable, Unit] = for {
+  def logic(database: String): ZIO[Console with Random with TestAdapter, Throwable, Unit] = for
     _ <- putStrLn(s"$database :: start")
     elements = model.elements(numOfEntities, 25, 2500)
     initTime <- TestAdapter.insertTestData(elements)
     _        <- putStrLn(s"$database :: init :: ${toMsString(initTime)}")
-    _ <- (for {
+    _ <- (for
       entityId <- random.nextLongBetween(0L, numOfEntities)
       testTime <- TestAdapter.test1(entityId)
       _        <- putStrLn(s"$database :: test1 :: ${toMsString(testTime)}")
-    } yield ()).repeatN(7)
-  } yield ()
+    yield ()).repeatN(7)
+  yield ()
 
   val postgresLogic: ZIO[zio.ZEnv, Throwable, Unit] =
     logic("PostgreSQL").provideCustomLayer(PostgresAdapter.live)

@@ -22,13 +22,13 @@ object PostgresAdapter:
   type Database = Has[Transactor[Task]]
 
   private val databaseLayer: ZLayer[Has[DataSource] with Blocking with Clock, Nothing, Database] = (
-    for {
+    for
       dataSource <- ZIO.service[DataSource]
       connectEC  <- ZIO.descriptor.map(_.executor.asEC)
       blockingEC <- blocking(ZIO.descriptor.map(_.executor.asEC))
       blocker    = Blocker.liftExecutionContext(blockingEC)
       transactor = Transactor.fromDataSource[Task](dataSource, connectEC, blocker)
-    } yield transactor
+    yield transactor
   ).toLayer
 
   val live: ZLayer[Blocking with Clock with Random, Throwable, TestAdapter] =
@@ -38,7 +38,7 @@ object PostgresAdapter:
     (database ++ ZLayer.identity[Blocking with Clock with Random]) >>> layer
 
   private def dataSource = (
-    for {
+    for
       container <- ZIO.service[PostgreSQLContainer]
       blocking  <- ZIO.service[Blocking.Service]
       ds <- blocking.effectBlocking {
@@ -48,21 +48,21 @@ object PostgresAdapter:
         postgresDs.setPassword(container.password)
         postgresDs
       }
-    } yield ds.asInstanceOf[DataSource]
+    yield ds.asInstanceOf[DataSource]
   ).toLayer
 
   private def layer = (
-    for {
+    for
       streamEnv <- ZIO.environment[Random with Blocking]
       dbEnv     <- ZIO.environment[Database]
       _         <- init.provide(dbEnv)
       clock     <- ZIO.service[Clock.Service]
-    } yield new TestAdapter.Service {
-      private def time(queryIO: RIO[Database, _]): Task[Long] = for {
+    yield new TestAdapter.Service {
+      private def time(queryIO: RIO[Database, _]): Task[Long] = for
         start <- clock.nanoTime
-        _     <- queryIO.provide(dbEnv)
-        end   <- clock.nanoTime
-      } yield end - start
+        _ <- queryIO.provide(dbEnv)
+        end <- clock.nanoTime
+      yield end - start
 
       override def insertTestData(elements: ZStream[Random with Blocking, Nothing, ModelElement]): Task[Long] = time {
         elements.provide(streamEnv).foreach {
@@ -117,7 +117,7 @@ object PostgresAdapter:
     }
   ).toLayer
 
-  private def init = for {
+  private def init = for
     _ <- tzio {
       sql"""
            |CREATE TABLE entity (
@@ -155,11 +155,11 @@ object PostgresAdapter:
            |	  REFERENCES account(id)
            |)""".stripMargin.update.run
     }
-  } yield ()
+  yield ()
 
-  private def tzio[T](connIO: ConnectionIO[T]): RIO[Database, T] = for {
+  private def tzio[T](connIO: ConnectionIO[T]): RIO[Database, T] = for
     transactor <- ZIO.service[Transactor[Task]]
     res        <- connIO.transact(transactor)
-  } yield res
+  yield res
 
 end PostgresAdapter

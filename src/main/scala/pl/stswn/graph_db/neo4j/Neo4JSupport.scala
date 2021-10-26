@@ -55,4 +55,4 @@ end Neo4JQueryBuilder
 
 trait Neo4JSupport:
   extension (sc: StringContext)
-    def c(args: Any*): Neo4JQueryBuilder = Neo4JQueryBuilder(sc.parts, args.map(_.asInstanceOf[AnyRef]))
+    inline def c(args: Any*): Neo4JQueryBuilder = Neo4JQueryBuilder(sc.parts, args.map(_.asInstanceOf[AnyRef]))
